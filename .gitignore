@@ -1,0 +1,38 @@
+# Dados locais — não versionar
+data/config.json
+data/materias.json
+
+# Credenciais e variáveis de ambiente
+.env
+.env.*
+secrets.toml
+.streamlit/secrets.toml
+
+# Python
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pycache
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# IDEs e editores
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Ambientes virtuais
+.venv/
+venv/
+env/
