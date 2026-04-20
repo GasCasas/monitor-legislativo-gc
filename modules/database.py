@@ -1,10 +1,15 @@
 """
 Camada de acesso ao Supabase.
 
-Tabelas esperadas:
-  materias     — id uuid PK, casa text, tipo text, numero text, ano text,
-                  observacao text, cadastrado_em timestamptz
-  configuracoes — chave text PK, valor text
+Schema real das tabelas (inspecionado via API):
+  materias:
+    id uuid PK, casa text, tipo text, numero text, ano text,
+    observacao text, ementa text, situacao text, link text,
+    status text (default 'pend'), ultima_verificacao text,
+    criado_em timestamptz (auto)
+
+  configuracoes:
+    id serial PK, chave text UNIQUE, valor text
 """
 
 from __future__ import annotations
@@ -35,7 +40,6 @@ def _cliente():
 
 
 def disponivel() -> bool:
-    """Retorna True se o Supabase está configurado e acessível."""
     return _cliente() is not None
 
 
@@ -44,31 +48,41 @@ def disponivel() -> bool:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def listar_materias() -> list:
-    """Retorna todas as matérias ordenadas por data de cadastro."""
     cli = _cliente()
     if cli is None:
         return []
     try:
-        res = cli.table("materias").select("*").order("cadastrado_em").execute()
+        res = cli.table("materias").select("*").order("criado_em").execute()
         return res.data or []
     except Exception:
         return []
 
 
 def inserir_materia(mat: dict) -> Optional[dict]:
-    """Insere uma matéria e retorna o registro criado."""
     cli = _cliente()
     if cli is None:
         return None
+    # Mapeia campos locais → colunas reais do Supabase
+    payload = {
+        "id":         mat.get("id"),
+        "casa":       mat.get("casa", ""),
+        "tipo":       mat.get("tipo", ""),
+        "numero":     mat.get("numero", ""),
+        "ano":        mat.get("ano", ""),
+        "observacao": mat.get("observacao", ""),
+        "ementa":     mat.get("ementa", ""),
+        "situacao":   mat.get("situacao", ""),
+        "link":       mat.get("link", ""),
+        "status":     "pend",
+    }
     try:
-        res = cli.table("materias").insert(mat).execute()
+        res = cli.table("materias").insert(payload).execute()
         return res.data[0] if res.data else None
     except Exception:
         return None
 
 
 def deletar_materia(materia_id: str) -> bool:
-    """Remove uma matéria pelo id. Retorna True se bem-sucedido."""
     cli = _cliente()
     if cli is None:
         return False
@@ -80,7 +94,6 @@ def deletar_materia(materia_id: str) -> bool:
 
 
 def atualizar_materia(materia_id: str, campos: dict) -> Optional[dict]:
-    """Atualiza campos de uma matéria. Retorna o registro atualizado."""
     cli = _cliente()
     if cli is None:
         return None
@@ -92,13 +105,13 @@ def atualizar_materia(materia_id: str, campos: dict) -> Optional[dict]:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# CRUD — tabela configuracoes  (modelo chave/valor)
+# CRUD — tabela configuracoes  (chave / valor)
 # ══════════════════════════════════════════════════════════════════════════════
 
 _CONFIG_DEFAULTS = {
-    "email_destino": "",
-    "email_remetente": "",
-    "email_senha_app": "",
+    "email_destino":    "",
+    "email_remetente":  "",
+    "email_senha_app":  "",
     "celular_whatsapp": "",
     "callmebot_apikey": "",
     "horario_briefing": "07:00",
@@ -106,7 +119,6 @@ _CONFIG_DEFAULTS = {
 
 
 def ler_configuracoes() -> dict:
-    """Lê todas as configurações e retorna como dict. Inclui defaults."""
     cli = _cliente()
     config = _CONFIG_DEFAULTS.copy()
     if cli is None:
@@ -121,11 +133,11 @@ def ler_configuracoes() -> dict:
 
 
 def salvar_configuracoes(config: dict) -> bool:
-    """Persiste o dict de configurações via upsert. Retorna True se OK."""
     cli = _cliente()
     if cli is None:
         return False
     try:
+        # Upsert sem o campo 'id' (auto-incrementado pelo banco)
         registros = [{"chave": k, "valor": str(v)} for k, v in config.items()]
         cli.table("configuracoes").upsert(registros, on_conflict="chave").execute()
         return True
@@ -134,7 +146,6 @@ def salvar_configuracoes(config: dict) -> bool:
 
 
 def salvar_configuracao(chave: str, valor: str) -> bool:
-    """Persiste uma única configuração chave/valor."""
     cli = _cliente()
     if cli is None:
         return False

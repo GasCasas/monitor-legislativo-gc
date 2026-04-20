@@ -2,6 +2,11 @@
 Persistência de matérias.
 
 Prioridade: Supabase → arquivo local data/materias.json (fallback).
+
+Mapeamento de campos:
+  Local JSON   →  Supabase
+  cadastrado_em → criado_em  (gerado automaticamente pelo banco)
+  (novo) ementa, situacao, link — colunas extras na tabela
 """
 
 from __future__ import annotations
@@ -34,6 +39,23 @@ def _salvar_local(materias: list) -> None:
     )
 
 
+def _normalizar(registro: dict) -> dict:
+    """Garante campos consistentes independente da origem (Supabase ou JSON)."""
+    return {
+        "id":            registro.get("id", ""),
+        "casa":          registro.get("casa", ""),
+        "tipo":          registro.get("tipo", ""),
+        "numero":        registro.get("numero", ""),
+        "ano":           registro.get("ano", ""),
+        "observacao":    registro.get("observacao", ""),
+        "ementa":        registro.get("ementa", ""),
+        "situacao":      registro.get("situacao", ""),
+        "link":          registro.get("link", ""),
+        # suporte a ambos os nomes de campo de data
+        "cadastrado_em": registro.get("criado_em") or registro.get("cadastrado_em", ""),
+    }
+
+
 # ─── API pública ──────────────────────────────────────────────────────────────
 
 def carregar_materias() -> list:
@@ -43,7 +65,7 @@ def carregar_materias() -> list:
         if db.disponivel():
             dados = db.listar_materias()
             if dados is not None:
-                return dados
+                return [_normalizar(m) for m in dados]
     except Exception:
         pass
     return _carregar_local()
@@ -54,12 +76,15 @@ def adicionar_materia(
 ) -> list:
     """Insere nova matéria e retorna a lista atualizada."""
     nova = {
-        "id": str(uuid.uuid4()),
-        "casa": casa.lower(),
-        "tipo": tipo.upper().strip(),
-        "numero": numero.strip(),
-        "ano": ano.strip(),
-        "observacao": observacao.strip(),
+        "id":            str(uuid.uuid4()),
+        "casa":          casa.lower(),
+        "tipo":          tipo.upper().strip(),
+        "numero":        numero.strip(),
+        "ano":           ano.strip(),
+        "observacao":    observacao.strip(),
+        "ementa":        "",
+        "situacao":      "",
+        "link":          "",
         "cadastrado_em": datetime.now().isoformat(),
     }
 
@@ -67,11 +92,10 @@ def adicionar_materia(
         from modules import database as db
         if db.disponivel():
             db.inserir_materia(nova)
-            return db.listar_materias()
+            return [_normalizar(m) for m in db.listar_materias()]
     except Exception:
         pass
 
-    # Fallback local
     materias = _carregar_local()
     materias.append(nova)
     _salvar_local(materias)
@@ -84,11 +108,10 @@ def remover_materia(materia_id: str) -> list:
         from modules import database as db
         if db.disponivel():
             db.deletar_materia(materia_id)
-            return db.listar_materias()
+            return [_normalizar(m) for m in db.listar_materias()]
     except Exception:
         pass
 
-    # Fallback local
     materias = _carregar_local()
     materias = [m for m in materias if m["id"] != materia_id]
     _salvar_local(materias)
@@ -96,5 +119,5 @@ def remover_materia(materia_id: str) -> list:
 
 
 def salvar_materias(materias: list) -> None:
-    """Sobrescreve a lista completa (usado apenas pelo fallback local)."""
+    """Sobrescreve a lista completa (fallback local apenas)."""
     _salvar_local(materias)

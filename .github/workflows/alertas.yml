@@ -1,0 +1,76 @@
+name: Alertas Legislativos
+
+on:
+  schedule:
+    # Horários em UTC (BRT = UTC-3)
+    # 08:00 BRT = 11:00 UTC
+    # 13:00 BRT = 16:00 UTC
+    # 18:00 BRT = 21:00 UTC
+    - cron: '0 11 * * 1-5'   # Seg–Sex 08:00 BRT
+    - cron: '0 16 * * 1-5'   # Seg–Sex 13:00 BRT
+    - cron: '0 21 * * 1-5'   # Seg–Sex 18:00 BRT
+
+  # Permite disparo manual pela interface do GitHub Actions
+  workflow_dispatch:
+    inputs:
+      motivo:
+        description: 'Motivo do disparo manual (opcional)'
+        required: false
+        default: 'Verificação manual'
+
+jobs:
+  verificar-alertas:
+    name: Verificar mudanças e enviar alertas
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Instalar dependências
+        run: |
+          pip install --upgrade pip
+          pip install requests
+          # Instala supabase sem a dependência storage3/pyiceberg
+          # (pyiceberg falha no build — não é necessária para operações de banco)
+          pip install supabase --no-deps
+          pip install \
+            "postgrest>=0.16" \
+            "realtime>=1.0" \
+            "supabase-auth>=0.1" \
+            "supabase-functions>=0.1" \
+            "deprecation>=2.1" \
+            "websockets>=11" \
+            "yarl>=1.22" \
+            "multidict>=4.0" \
+            "propcache>=0.2" \
+            "strenum>=0.4" \
+            "httpx>=0.26" \
+            "pyjwt[crypto]>=2.10"
+
+      - name: Executar verificação de alertas
+        env:
+          SUPABASE_URL:        ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          EMAIL_REMETENTE:     ${{ secrets.EMAIL_REMETENTE }}
+          EMAIL_SENHA_APP:     ${{ secrets.EMAIL_SENHA_APP }}
+          EMAIL_DESTINO:       ${{ secrets.EMAIL_DESTINO }}
+          CELULAR_WHATSAPP:    ${{ secrets.CELULAR_WHATSAPP }}
+          CALLMEBOT_APIKEY:    ${{ secrets.CALLMEBOT_APIKEY }}
+        run: python scripts/verificar_alertas.py
+
+      - name: Notificar falha (opcional)
+        if: failure()
+        run: |
+          echo "::error::O script de alertas falhou. Verifique os logs acima."
+          echo "Possíveis causas:"
+          echo "  - GitHub Secrets não configurados (SUPABASE_URL, SUPABASE_SECRET_KEY)"
+          echo "  - Colunas 'situacao' e 'situacao_verificada_em' ausentes na tabela materias"
+          echo "  - Falha de conectividade com APIs do Senado/Câmara"
