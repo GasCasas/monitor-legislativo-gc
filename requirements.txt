@@ -1,4 +1,22 @@
+# App principal (Streamlit)
 streamlit>=1.32.0
 requests>=2.31.0
+
+# Supabase e dependências explícitas
+# storage3==0.7.7 é a última versão sem pyiceberg (evita falha de build no Windows)
 supabase>=2.5.0
 storage3==0.7.7
+postgrest>=0.10.0
+realtime>=1.0.0
+supabase-auth>=0.1.0
+supabase-functions>=0.1.0
+
+# Dependências transitivas do supabase
+httpx>=0.26.0,<0.29.0
+pyjwt[crypto]>=2.10.0
+deprecation>=2.1.0
+websockets>=11.0
+yarl>=1.22.0
+multidict>=4.0
+propcache>=0.2.0
+strenum>=0.4.0

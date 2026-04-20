@@ -37,23 +37,33 @@ jobs:
       - name: Instalar dependências
         run: |
           pip install --upgrade pip
-          pip install requests
-          # Instala supabase sem a dependência storage3/pyiceberg
-          # (pyiceberg falha no build — não é necessária para operações de banco)
-          pip install supabase --no-deps
+
+          # 1. Instala todas as dependências transitivas primeiro
+          #    (sem supabase/storage3, para evitar que pip tente resolver pyiceberg)
           pip install \
-            "postgrest>=0.16" \
-            "realtime>=1.0" \
-            "supabase-auth>=0.1" \
-            "supabase-functions>=0.1" \
+            requests \
+            "httpx>=0.26,<0.29" \
+            "pyjwt[crypto]>=2.10" \
             "deprecation>=2.1" \
             "websockets>=11" \
             "yarl>=1.22" \
             "multidict>=4.0" \
             "propcache>=0.2" \
-            "strenum>=0.4" \
-            "httpx>=0.26" \
-            "pyjwt[crypto]>=2.10"
+            "strenum>=0.4"
+
+          # 2. Instala storage3 0.7.7 explicitamente (sem pyiceberg)
+          pip install "storage3==0.7.7"
+
+          # 3. Instala os pacotes supabase sem deixar pip sobrescrever storage3
+          pip install \
+            "postgrest>=0.10" \
+            "realtime>=1.0" \
+            "supabase-auth>=0.1" \
+            "supabase-functions>=0.1"
+
+          # 4. Instala o pacote supabase sem dependências
+          #    (todas já instaladas acima; evita upgrade automático do storage3)
+          pip install supabase --no-deps
 
       - name: Executar verificação de alertas
         env:
@@ -72,5 +82,5 @@ jobs:
           echo "::error::O script de alertas falhou. Verifique os logs acima."
           echo "Possíveis causas:"
           echo "  - GitHub Secrets não configurados (SUPABASE_URL, SUPABASE_SECRET_KEY)"
-          echo "  - Colunas 'situacao' e 'situacao_verificada_em' ausentes na tabela materias"
+          echo "  - Credenciais inválidas ou expiradas no Supabase"
           echo "  - Falha de conectividade com APIs do Senado/Câmara"
