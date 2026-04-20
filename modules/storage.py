@@ -1,3 +1,11 @@
+"""
+Persistência de matérias.
+
+Prioridade: Supabase → arquivo local data/materias.json (fallback).
+"""
+
+from __future__ import annotations
+
 import json
 import uuid
 from datetime import datetime
@@ -6,7 +14,9 @@ from pathlib import Path
 DATA_FILE = Path(__file__).parent.parent / "data" / "materias.json"
 
 
-def carregar_materias() -> list:
+# ─── JSON local ───────────────────────────────────────────────────────────────
+
+def _carregar_local() -> list:
     if not DATA_FILE.exists():
         DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
         DATA_FILE.write_text("[]", encoding="utf-8")
@@ -17,15 +27,32 @@ def carregar_materias() -> list:
         return []
 
 
-def salvar_materias(materias: list) -> None:
+def _salvar_local(materias: list) -> None:
     DATA_FILE.write_text(
         json.dumps(materias, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
 
 
-def adicionar_materia(casa: str, tipo: str, numero: str, ano: str, observacao: str) -> list:
-    materias = carregar_materias()
+# ─── API pública ──────────────────────────────────────────────────────────────
+
+def carregar_materias() -> list:
+    """Retorna a lista de matérias (Supabase ou JSON local)."""
+    try:
+        from modules import database as db
+        if db.disponivel():
+            dados = db.listar_materias()
+            if dados is not None:
+                return dados
+    except Exception:
+        pass
+    return _carregar_local()
+
+
+def adicionar_materia(
+    casa: str, tipo: str, numero: str, ano: str, observacao: str
+) -> list:
+    """Insere nova matéria e retorna a lista atualizada."""
     nova = {
         "id": str(uuid.uuid4()),
         "casa": casa.lower(),
@@ -35,13 +62,39 @@ def adicionar_materia(casa: str, tipo: str, numero: str, ano: str, observacao: s
         "observacao": observacao.strip(),
         "cadastrado_em": datetime.now().isoformat(),
     }
+
+    try:
+        from modules import database as db
+        if db.disponivel():
+            db.inserir_materia(nova)
+            return db.listar_materias()
+    except Exception:
+        pass
+
+    # Fallback local
+    materias = _carregar_local()
     materias.append(nova)
-    salvar_materias(materias)
+    _salvar_local(materias)
     return materias
 
 
 def remover_materia(materia_id: str) -> list:
-    materias = carregar_materias()
+    """Remove matéria pelo id e retorna a lista atualizada."""
+    try:
+        from modules import database as db
+        if db.disponivel():
+            db.deletar_materia(materia_id)
+            return db.listar_materias()
+    except Exception:
+        pass
+
+    # Fallback local
+    materias = _carregar_local()
     materias = [m for m in materias if m["id"] != materia_id]
-    salvar_materias(materias)
+    _salvar_local(materias)
     return materias
+
+
+def salvar_materias(materias: list) -> None:
+    """Sobrescreve a lista completa (usado apenas pelo fallback local)."""
+    _salvar_local(materias)

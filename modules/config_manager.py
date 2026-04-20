@@ -1,3 +1,11 @@
+"""
+Persistência de configurações.
+
+Prioridade: Supabase → arquivo local data/config.json (fallback).
+"""
+
+from __future__ import annotations
+
 import json
 from pathlib import Path
 
@@ -13,7 +21,9 @@ DEFAULT_CONFIG = {
 }
 
 
-def carregar_config() -> dict:
+# ─── JSON local ───────────────────────────────────────────────────────────────
+
+def _carregar_local() -> dict:
     if not CONFIG_FILE.exists():
         return DEFAULT_CONFIG.copy()
     try:
@@ -25,9 +35,35 @@ def carregar_config() -> dict:
         return DEFAULT_CONFIG.copy()
 
 
-def salvar_config(config: dict) -> None:
+def _salvar_local(config: dict) -> None:
     CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
     CONFIG_FILE.write_text(
         json.dumps(config, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+
+
+# ─── API pública ──────────────────────────────────────────────────────────────
+
+def carregar_config() -> dict:
+    """Lê configurações do Supabase ou do arquivo local (fallback)."""
+    try:
+        from modules import database as db
+        if db.disponivel():
+            return db.ler_configuracoes()
+    except Exception:
+        pass
+    return _carregar_local()
+
+
+def salvar_config(config: dict) -> None:
+    """Salva configurações no Supabase e também no arquivo local (backup)."""
+    # Sempre persiste localmente como backup offline
+    _salvar_local(config)
+
+    try:
+        from modules import database as db
+        if db.disponivel():
+            db.salvar_configuracoes(config)
+    except Exception:
+        pass
